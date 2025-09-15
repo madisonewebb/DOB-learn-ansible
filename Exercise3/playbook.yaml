@@ -1,0 +1,141 @@
+---
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Provision EC2 Instance
+      amazon.aws.ec2_instance:
+        name: madi-dob-ansible
+        key_name: madi-dob-ansible
+        vpc_subnet_id: subnet-0e97985eee3bee899
+        instance_type: t2.micro
+        security_groups:
+          - madi-dob-ansible-ssh
+        network:
+          assign_public_ip: true
+        region: us-east-2
+        image_id: ami-0cfde0ea8edd312d4
+        wait: true
+      register: result
+
+    - name: Add to host group
+      add_host: 
+        name: "{{ item.public_ip_address }}"
+        groups: ec2hosts
+      loop: "{{ result.instances }}"
+
+- hosts: ec2hosts
+  become: yes
+  vars:
+    runner_repo_owner: "madisonewebb"
+    runner_repo_name: "DOB-learn-ansible"
+    runner_repo_url: "https://github.com/{{ runner_repo_owner }}/{{ runner_repo_name }}"
+    github_pat: "{{ lookup('env', 'GITHUB_PAT') }}"
+
+  tasks:
+    - name: Install packages
+      apt:
+        name:
+          - acl
+        state: present
+
+    - name: Ensure github-actions-runner group exists
+      group:
+        name: github-actions-runner
+        state: present
+
+    - name: Ensure github-actions-runner user exists
+      user:
+        name: github-actions-runner
+        group: github-actions-runner
+        home: /home/github-actions-runner
+        state: present
+
+    - name: Ensure correct permissions for github-actions-runner home
+      file:
+        path: /home/github-actions-runner
+        owner: github-actions-runner
+        group: github-actions-runner
+        mode: '0755'
+        state: directory
+
+    - name: Download the latest runner package
+      get_url:
+        url: https://github.com/actions/runner/releases/download/v2.328.0/actions-runner-linux-x64-2.328.0.tar.gz
+        dest: /home/github-actions-runner/actions-runner-linux-x64-2.328.0.tar.gz
+        mode: "0644"
+        owner: github-actions-runner
+        group: github-actions-runner
+        force: no
+      register: pkg
+
+    - name: Validate the hash
+      command: |
+        echo "01066fad3a2893e63e6ca880ae3a1fad5bf9329d60e77ee15f2b97c148c3cd4e  actions-runner-linux-x64-2.328.0.tar.gz" | shasum -a 256 -c
+      args:
+        chdir: /home/github-actions-runner
+
+    - name: Extract the installer
+      unarchive:
+        src: /home/github-actions-runner/actions-runner-linux-x64-2.328.0.tar.gz
+        dest: /home/github-actions-runner
+        remote_src: yes
+        owner: github-actions-runner
+        group: github-actions-runner
+      when: pkg.changed
+
+    - name: Ensure runner directory ownership
+      file:
+        path: /home/github-actions-runner
+        owner: github-actions-runner
+        group: github-actions-runner
+        recurse: yes
+
+    - name: Check if runner is already configured
+      stat:
+        path: /home/github-actions-runner/.runner
+      register: cfg
+
+    - name: Assert GitHub PAT is provided when configuring
+      assert:
+        that:
+          - github_pat is defined
+          - github_pat | length > 0
+        fail_msg: "github_pat is not set. Export GITHUB_PAT on the host and re-run 'vagrant provision'."
+      when: not cfg.stat.exists
+
+    - name: Request registration token from GitHub
+      uri:
+        url: "https://api.github.com/repos/{{ runner_repo_owner }}/{{ runner_repo_name }}/actions/runners/registration-token"
+        method: POST
+        headers:
+          Accept: "application/vnd.github+json"
+          Authorization: "Bearer {{ github_pat }}"
+          X-GitHub-Api-Version: "2022-11-28"
+        status_code: 201
+        return_content: yes
+      register: reg_token
+      when: not cfg.stat.exists
+
+    - name: Configure the runner
+      command: ./config.sh --url {{ runner_repo_url }} --token {{ reg_token.json.token }} --unattended
+      args:
+        chdir: /home/github-actions-runner
+        creates: /home/github-actions-runner/.runner
+      become_user: github-actions-runner
+      when: not cfg.stat.exists
+
+    - name: Uninstall any existing runner service
+      command: ./svc.sh uninstall
+      args:
+        chdir: /home/github-actions-runner
+      ignore_errors: true
+
+    - name: Install the runner service for github-actions-runner user
+      command: ./svc.sh install github-actions-runner
+      args:
+        chdir: /home/github-actions-runner
+
+    - name: Start the runner service
+      command: ./svc.sh start
+      args:
+        chdir: /home/github-actions-runner
