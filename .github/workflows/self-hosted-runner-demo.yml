@@ -18,10 +18,5 @@ jobs:
     - name: Run a one-line script
       run: echo "Hello from self-hosted runner!"
         
-    - name: Test Ansible
-      run: |
-        echo "Testing Ansible installation:"
-        ansible --version
-        
     - name: Complete
       run: echo "Job completed successfully on self-hosted runner"
