@@ -1,0 +1,15 @@
+# Local environment files (do not commit secrets)
+.env
+.envrc
+
+# Vagrant state directory
+.vagrant/
+
+# Ansible retry files
+*.retry
+
+# macOS
+.DS_Store
+
+# Terraform
+.terraform

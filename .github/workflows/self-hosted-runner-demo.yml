@@ -1,0 +1,27 @@
+name: Self-Hosted Runner Demo
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Run a one-line script
+      run: echo "Hello from self-hosted runner!"
+        
+    - name: Test Ansible
+      run: |
+        echo "Testing Ansible installation:"
+        ansible --version
+        
+    - name: Complete
+      run: echo "Job completed successfully on self-hosted runner"

@@ -1,43 +1,6 @@
 ---
-- hosts: localhost
-  gather_facts: False
-  tasks:
-    - name: Provision EC2 Instance
-      amazon.aws.ec2_instance:
-        name: madi-dob-ansible
-        key_name: madi-dob-ansible
-        vpc_subnet_id: subnet-0e97985eee3bee899
-        instance_type: t2.micro
-        security_group: madi-dob-ansible-ssh
-        network:
-          assign_public_ip: true
-        region: us-east-2
-        image_id: ami-0cfde0ea8edd312d4
-        wait: true
-      register: result
-
-    - name: Add to host group
-      add_host: 
-        name: "{{ item.public_ip_address }}"
-        groups: ec2hosts
-        ansible_user: ubuntu
-        ansible_ssh_private_key_file: /Users/madison/Keys/madi-dob-ansible.pem
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-      loop: "{{ result.instances }}"
-
-- hosts: ec2hosts
+- hosts: all
   become: yes
-  gather_facts: false
-  
-  pre_tasks:
-    - name: Wait for SSH to be available
-      wait_for_connection:
-        timeout: 300
-      register: ssh_ready
-      until: ssh_ready is success
-      retries: 30
-      delay: 10
-      
   vars:
     runner_repo_owner: "madisonewebb"
     runner_repo_name: "DOB-learn-ansible"
