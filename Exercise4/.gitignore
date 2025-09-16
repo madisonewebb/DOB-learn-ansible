@@ -13,3 +13,4 @@
 
 # Terraform
 .terraform
+terraform.tfvars

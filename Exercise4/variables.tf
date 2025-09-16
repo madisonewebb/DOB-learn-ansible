@@ -76,7 +76,7 @@ variable "ami_id" {
 variable "key_name" {
   description = "SSH key pair name to attach to the instance"
   type        = string
-  default     = null
+  default     = "madi-dob-ansible"
 }
 
 variable "aws_access_key" {
@@ -97,4 +97,10 @@ variable "aws_profile" {
   description = "AWS CLI profile name to use (optional)."
   type        = string
   default     = null
+}
+
+variable "github_pat" {
+  type      = string
+  sensitive = true
+  description = "GitHub Personal Access Token"
 }

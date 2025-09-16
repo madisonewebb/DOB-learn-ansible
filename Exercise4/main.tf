@@ -1,3 +1,18 @@
+terraform {
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.92"
+    }
+  }
+
+  required_version = ">= 1.2"
+}
+
 provider "aws" {
   region  = var.aws_region
   profile = "AWSAdministratorAccess-095329250105"
@@ -38,12 +53,13 @@ module "ec2_instance" {
   ami           = var.ami_id != null ? var.ami_id : data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   key_name      = var.key_name
+  associate_public_ip_address = true
 
   vpc_security_group_ids = concat(
     [module.vpc.default_security_group_id],
     [aws_security_group.allow_ssh.id]
   )
-  subnet_id = module.vpc.private_subnets[0]
+  subnet_id = module.vpc.public_subnets[0]
 
   tags = {
     Name = var.instance_name
@@ -80,20 +96,15 @@ resource "aws_security_group" "allow_ssh" {
 resource "null_resource" "run_ansible" {
   depends_on = [module.ec2_instance]
 
-  # Trigger on instance change
   triggers = {
     instance_id = module.ec2_instance[0].id
   }
 
-  # Run Ansible playbook using existing inventory.ini
   provisioner "local-exec" {
-    command = <<EOT
-      ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
-        -i inventory.ini \
-        playbook.yaml
-    EOT
+    command = "ansible-playbook playbook.yaml -i '${module.ec2_instance[0].public_ip},'"
     environment = {
       ANSIBLE_HOST_KEY_CHECKING = "False"
+      GITHUB_PAT                = var.github_pat != null ? var.github_pat : ""
     }
   }
 }

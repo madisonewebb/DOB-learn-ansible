@@ -1,6 +1,18 @@
 ---
 - hosts: all
   become: yes
+  gather_facts: false
+  user: ubuntu
+  
+  pre_tasks:
+    - name: Wait for SSH to be available
+      wait_for_connection:
+        timeout: 5
+      register: ssh_ready
+      until: ssh_ready is success
+      retries: 30
+      delay: 10
+      
   vars:
     runner_repo_owner: "madisonewebb"
     runner_repo_name: "DOB-learn-ansible"
